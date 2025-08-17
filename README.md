@@ -1,142 +1,141 @@
-🚌 Bus Tracking System
-A web-based live bus tracking and student wait request platform for schools, colleges, and organizations. Drivers can update live location and respond to student wait requests; students/parents can track buses in real time, view routes, and send "Please wait" notifications.
+# 🚌 Bus Buddy – Smart Bus Tracking System  
 
-Features
-Live Bus Tracking: View real-time positions of all active buses and your own location on a map.
+A **web-based live bus tracking & student wait request platform** designed for schools, colleges, and organizations.  
+Drivers can update **live location** and respond to student requests, while students/parents can track buses in real-time, view routes, and send **“Please Wait”** notifications.  
 
-Wait Requests: Students can send a "Please wait" request for their stop; drivers receive instant notifications and can acknowledge/decline.
+![GitHub repo size](https://img.shields.io/github/repo-size/Santhosh-I/Bus-Buddy?color=blue&style=flat)  
+![GitHub last commit](https://img.shields.io/github/last-commit/Santhosh-I/Bus-Buddy?color=green&style=flat)  
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)  
 
-Route Visualization: Each bus route and all stops are visualized on an interactive map.
+---
 
-Notification System: Sound and browser notifications for drivers when new student wait requests arrive.
+## ✨ Features  
 
-Time Consistency: All timestamps are stored in UTC and displayed in India Standard Time (IST) for end users.
+- 📍 **Live Bus Tracking** – Real-time positions of active buses & your own location.  
+- 🙋 **Wait Requests** – Students can send “Please wait” requests to drivers.  
+- 🗺️ **Route Visualization** – Interactive maps with routes & stops.  
+- 🔔 **Notifications** – Sound + browser alerts for drivers on new requests.  
+- ⏱️ **Time Consistency** – UTC storage, auto-converted to IST.  
+- 📱 **Mobile Friendly** – Works smoothly on both desktop & mobile.  
+- ⚙️ **Admin Panel (optional)** – Manage buses, routes, stops, and users.  
 
-Mobile Friendly: Designed for both desktop and mobile browsers.
+---
 
-Admin Panel: (optional) For managing buses, routes, stops, and users.
+## 🛠️ Tech Stack  
 
-Stack
-Backend: Python, Flask, SQLAlchemy
+**Backend:** Python, Flask, SQLAlchemy  
+**Frontend:** HTML5, Bootstrap 5, JavaScript (ES6+), Leaflet.js, FontAwesome  
+**Database:** SQLite / MySQL / PostgreSQL (via SQLAlchemy ORM)  
+**APIs:** RESTful (JSON)  
+**Time Zone:** UTC storage → IST display (Asia/Kolkata)  
 
-Frontend: HTML5, Bootstrap 5, JavaScript (ES6+), Leaflet.js, FontAwesome
+---
 
-Database: SQLite/MySQL/PostgreSQL (via SQLAlchemy ORM)
+## 📂 Project Structure  
 
-APIs: RESTful endpoints (JSON)
-
-Time Zone Handling: UTC storage, IST display (Asia/Kolkata)
-
-Project Structure
-text
 bus-tracking/
 ├── app.py
 ├── models.py
 ├── static/
-│   ├── js/
-│   │   ├── main.js
-│   │   └── timeUtils.js
-│   └── sounds/
-│       └── notification.mp3
+│ ├── js/
+│ │ ├── main.js
+│ │ └── timeUtils.js
+│ └── sounds/
+│ └── notification.mp3
 ├── templates/
-│   ├── base.html
-│   ├── driver.html
-│   ├── bus_tracking.html
-│   └── ...
+│ ├── base.html
+│ ├── driver.html
+│ ├── bus_tracking.html
+│ └── ...
 ├── requirements.txt
 ├── README.md
 └── ...
-Time Zone Standardization
-Storage: All timestamps (e.g., timestamp, last_updated) are stored in the database in UTC (datetime.now(timezone.utc)).
 
-APIs: All API responses return UTC ISO 8601 formatted timestamps (e.g., "2025-08-17T22:30:45Z").
+yaml
+Copy
+Edit
 
-Frontend Display: All times are converted and displayed in IST using a centralized TimeUtils class in JavaScript.
+---
 
-Templates: When rendering server-side, use a Jinja2 filter to format times in IST.
+## ⏳ Time Zone Standardization  
 
-Migration: Legacy data is migrated from IST to UTC if necessary.
+- **Storage:** UTC (`datetime.now(timezone.utc)`)  
+- **API Responses:** UTC in ISO 8601 (e.g., `2025-08-17T22:30:45Z`)  
+- **Frontend Display:** Converted to IST using `TimeUtils.js`  
+- **Server-Side Templates:** Jinja2 filters for IST formatting  
 
-Setup & Installation
-Clone the repo
+---
 
-text
-git clone https://github.com/yourusername/bus-tracking
-cd bus-tracking
-Install dependencies
+## 🚀 Setup & Installation  
 
-text
+```bash
+# Clone the repo
+git clone https://github.com/Santhosh-I/Bus-Buddy.git
+cd Bus-Buddy
+
+# Install dependencies
 pip install -r requirements.txt
-Configure environment variables
-(Copy .env.example to .env and update settings.)
 
-Run the database migrations
+# Configure environment
+cp .env.example .env   # Update settings
 
-text
+# Run database migrations
 flask db upgrade
-Run the app
 
-text
+# Start the app
 flask run
-Visit http://localhost:5000
+👉 Visit: http://localhost:5000
 
-Usage
-Drivers:
-Log in, start tracking your location, and manage wait requests. Grant location permissions for accurate updates and browser notification permissions for instant alerts.
+📌 Usage
+👨‍✈️ Drivers
 
-Students/Parents:
-View the live map, see your location alongside all active buses, select a route, and send a "Please wait" request if needed.
+Log in, start tracking location
 
-Key Endpoints
-/driver — Driver dashboard (maps, status, wait requests)
+Manage wait requests (acknowledge/decline)
 
-/bus-tracking — Live bus tracking for students
+Allow location + notification permissions
 
-/api/driver/wait_requests — Poll for new wait requests (JSON)
+👨‍🎓 Students/Parents
 
-/api/update_location — Post driver's current location
+View live bus map
 
-/api/bus_locations — Get all active bus locations (JSON)
+Track location + select route
 
-Browser Support
-Latest releases of Chrome, Firefox, Edge, Safari
+Send “Please wait” requests
 
-Requires geolocation and (optionally) notification permissions
+🔑 Key Endpoints
+Endpoint	Description
+/driver	Driver dashboard (maps, requests)
+/bus-tracking	Student live bus tracking
+/api/update_location	Update driver’s location
+/api/bus_locations	Get all active bus locations
+/api/driver/wait_requests	Poll for new wait requests
 
-Customization
-Add or edit buses/routes/stops using the admin panel or scripts.
+🌍 Browser Support
+✔️ Chrome (latest)
+✔️ Firefox (latest)
+✔️ Edge (latest)
+✔️ Safari (latest)
 
-Adjust map home coordinates in the JS as needed.
+🔒 Requires HTTPS for geolocation + notifications
 
-Replace notification.mp3 in static/sounds/ with your custom sound (optional).
+🐞 Troubleshooting
+⏱️ Time errors → Ensure server time = UTC
 
-Troubleshooting
-Time errors / misaligned clocks:
+📍 Location not detected → Enable browser geolocation & HTTPS
 
-Ensure server time is set to UTC.
+🔔 Notifications not working → Check browser notification permissions
 
-All browser displayed times are converted to IST using the JS TimeUtils class.
+📜 License
+This project is licensed under the MIT License.
+See LICENSE for more details.
 
-Location not detected:
-
-Check browser settings and permissions.
-
-Use HTTPS for production deployments (browsers block geolocation on HTTP).
-
-Notifications not working:
-
-Ensure permissions for notifications are granted in browser settings.
-
-License
-MIT License.
-See LICENSE for more information.
-
-Contributors
-Your Name (@yourusername)
+👥 Contributors
+Santhosh (@Santhosh-I)
 
 Project contributors...
 
-Acknowledgements
+🙏 Acknowledgements
 Leaflet.js
 
 Bootstrap
@@ -144,5 +143,3 @@ Bootstrap
 FontAwesome
 
 OpenStreetMap
-
-This project is designed with standard time handling and robust event-driven notifications for educational institution bus fleets.
