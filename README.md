@@ -1,145 +1,159 @@
-# 🚌 Bus Buddy – Smart Bus Tracking System  
 
-A **web-based live bus tracking & student wait request platform** designed for schools, colleges, and organizations.  
-Drivers can update **live location** and respond to student requests, while students/parents can track buses in real-time, view routes, and send **“Please Wait”** notifications.  
+# 🚌 Bus Buddy
 
-![GitHub repo size](https://img.shields.io/github/repo-size/Santhosh-I/Bus-Buddy?color=blue&style=flat)  
-![GitHub last commit](https://img.shields.io/github/last-commit/Santhosh-I/Bus-Buddy?color=green&style=flat)  
-![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)  
+*A real-time bus tracking and student wait request platform for schools, colleges, and organizations.*
 
 ---
 
-## ✨ Features  
+## 🚀 Features
 
-- 📍 **Live Bus Tracking** – Real-time positions of active buses & your own location.  
-- 🙋 **Wait Requests** – Students can send “Please wait” requests to drivers.  
-- 🗺️ **Route Visualization** – Interactive maps with routes & stops.  
-- 🔔 **Notifications** – Sound + browser alerts for drivers on new requests.  
-- ⏱️ **Time Consistency** – UTC storage, auto-converted to IST.  
-- 📱 **Mobile Friendly** – Works smoothly on both desktop & mobile.  
-- ⚙️ **Admin Panel (optional)** – Manage buses, routes, stops, and users.  
-
----
-
-## 🛠️ Tech Stack  
-
-**Backend:** Python, Flask, SQLAlchemy  
-**Frontend:** HTML5, Bootstrap 5, JavaScript (ES6+), Leaflet.js, FontAwesome  
-**Database:** SQLite / MySQL / PostgreSQL (via SQLAlchemy ORM)  
-**APIs:** RESTful (JSON)  
-**Time Zone:** UTC storage → IST display (Asia/Kolkata)  
+* **Live Bus Tracking**: View real-time positions of all active buses and your own location on a map.
+* **Wait Requests**: Students can send a *"Please wait"* request for their stop; drivers receive instant notifications and can acknowledge/decline.
+* **Route Visualization**: Each bus route and all stops are shown on an interactive map.
+* **Notification System**: Sound + browser notifications for drivers when new student wait requests arrive.
+* **Time Consistency**: All timestamps are stored in UTC and displayed in IST.
+* **Mobile Friendly**: Works seamlessly on both desktop and mobile.
+* **Admin Panel (optional)**: Manage buses, routes, stops, and users.
 
 ---
 
-## 📂 Project Structure  
+## 🛠️ Tech Stack
 
+* **Backend**: Python, Flask, SQLAlchemy
+* **Frontend**: HTML5, Bootstrap 5, JavaScript (ES6+), Leaflet.js, FontAwesome
+* **Database**: SQLite/MySQL/PostgreSQL (via SQLAlchemy ORM)
+* **APIs**: RESTful endpoints (JSON)
+* **Time Zone**: UTC storage, IST display (Asia/Kolkata)
+
+---
+
+## 📂 Project Structure
+
+```
 bus-tracking/
 ├── app.py
 ├── models.py
 ├── static/
-│ ├── js/
-│ │ ├── main.js
-│ │ └── timeUtils.js
-│ └── sounds/
-│ └── notification.mp3
+│   ├── js/
+│   │   ├── main.js
+│   │   └── timeUtils.js
+│   └── sounds/
+│       └── notification.mp3
 ├── templates/
-│ ├── base.html
-│ ├── driver.html
-│ ├── bus_tracking.html
-│ └── ...
+│   ├── base.html
+│   ├── driver.html
+│   ├── bus_tracking.html
+│   └── ...
 ├── requirements.txt
 ├── README.md
 └── ...
-
-yaml
-Copy
-Edit
+```
 
 ---
 
-## ⏳ Time Zone Standardization  
+## ⏰ Time Zone Handling
 
-- **Storage:** UTC (`datetime.now(timezone.utc)`)  
-- **API Responses:** UTC in ISO 8601 (e.g., `2025-08-17T22:30:45Z`)  
-- **Frontend Display:** Converted to IST using `TimeUtils.js`  
-- **Server-Side Templates:** Jinja2 filters for IST formatting  
+* **Database Storage**: All timestamps stored in UTC.
+* **APIs**: Return UTC ISO 8601 format.
+* **Frontend**: Converted & displayed in IST with `TimeUtils.js`.
+* **Server Templates**: Jinja2 filter for IST formatting.
 
 ---
 
-## 🚀 Setup & Installation  
+## ⚙️ Setup & Installation
 
 ```bash
 # Clone the repo
-git clone https://github.com/Santhosh-I/Bus-Buddy.git
-cd Bus-Buddy
+git clone https://github.com/yourusername/bus-tracking
+cd bus-tracking
 
 # Install dependencies
 pip install -r requirements.txt
 
-# Configure environment
-cp .env.example .env   # Update settings
+# Configure environment variables
+cp .env.example .env  # and update settings
 
-# Run database migrations
+# Run DB migrations
 flask db upgrade
 
 # Start the app
 flask run
-👉 Visit: http://localhost:5000
+```
 
-📌 Usage
-👨‍✈️ Drivers
+👉 Visit: [http://localhost:5000](http://localhost:5000)
 
-Log in, start tracking location
+---
 
-Manage wait requests (acknowledge/decline)
+## 👨‍💻 Usage
 
-Allow location + notification permissions
+### 🎧 Drivers
 
-👨‍🎓 Students/Parents
+* Log in and start location tracking.
+* Respond to student *"Please wait"* requests.
+* Allow browser notifications.
 
-View live bus map
+### 🎓 Students/Parents
 
-Track location + select route
+* View buses & routes live.
+* Send *"Please wait"* requests for their stop.
 
-Send “Please wait” requests
+---
 
-🔑 Key Endpoints
-Endpoint	Description
-/driver	Driver dashboard (maps, requests)
-/bus-tracking	Student live bus tracking
-/api/update_location	Update driver’s location
-/api/bus_locations	Get all active bus locations
-/api/driver/wait_requests	Poll for new wait requests
+## 🔑 API Endpoints
 
-🌍 Browser Support
-✔️ Chrome (latest)
-✔️ Firefox (latest)
-✔️ Edge (latest)
-✔️ Safari (latest)
+* `/driver` — Driver dashboard
+* `/bus-tracking` — Live student tracking
+* `/api/driver/wait_requests` — Poll for wait requests
+* `/api/update_location` — Post driver location
+* `/api/bus_locations` — Get all active bus locations
 
-🔒 Requires HTTPS for geolocation + notifications
+---
 
-🐞 Troubleshooting
-⏱️ Time errors → Ensure server time = UTC
+## 🌍 Browser Support
 
-📍 Location not detected → Enable browser geolocation & HTTPS
+* Chrome ✅
+* Firefox ✅
+* Edge ✅
+* Safari ✅
 
-🔔 Notifications not working → Check browser notification permissions
+⚠️ Requires **geolocation** and (optional) **notifications**.
 
-📜 License
-This project is licensed under the MIT License.
-See LICENSE for more details.
+---
 
-👥 Contributors
-Santhosh (@Santhosh-I)
+## 🎨 Customization
 
-Project contributors...
+* Add/edit buses & routes in the admin panel.
+* Change map home coordinates in JS.
+* Replace `notification.mp3` with a custom sound.
 
-🙏 Acknowledgements
-Leaflet.js
+---
 
-Bootstrap
+## 🐛 Troubleshooting
 
-FontAwesome
+* **Time errors** → Ensure server is set to UTC.
+* **Location not detected** → Use HTTPS & check permissions.
+* **Notifications not working** → Enable notification permissions in browser.
 
-OpenStreetMap
+---
+
+## 📜 License
+
+MIT License — see [LICENSE](LICENSE)
+
+---
+
+## 🤝 Contributors
+
+* SANTHOSH-I
+* Developed By *Tech-Knox*
+
+---
+
+## 🙏 Acknowledgements
+
+* [Leaflet.js](https://leafletjs.com)
+* [Bootstrap](https://getbootstrap.com)
+* [FontAwesome](https://fontawesome.com)
+* [OpenStreetMap](https://www.openstreetmap.org)
+
+---
