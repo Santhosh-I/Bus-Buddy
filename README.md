@@ -134,18 +134,13 @@ flask run
 * **Location not detected** → Use HTTPS & check permissions.
 * **Notifications not working** → Enable notification permissions in browser.
 
----
-
-## 📜 License
-
-MIT License — see [LICENSE](LICENSE)
 
 ---
 
 ## 🤝 Contributors
 
 * SANTHOSH-I
-* Developed By *Tech-Knox*
+* Developed By ###Tech-Knox
 
 ---
 
