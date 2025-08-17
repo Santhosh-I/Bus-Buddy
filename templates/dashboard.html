@@ -1,0 +1,144 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-12">
+            <h2><i class="fas fa-tachometer-alt"></i> Dashboard</h2>
+            <p>Welcome, {{ current_user.username }}! ({{ current_user.role.title() }})</p>
+        </div>
+    </div>
+
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-map-marked-alt"></i> Live Bus Locations</h5>
+                </div>
+                <div class="card-body">
+                    <div id="map" style="height: 400px;"></div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-list"></i> Available Buses</h5>
+                </div>
+                <div class="card-body">
+                    <div id="bus-list">
+                        <p class="text-center"><i class="fas fa-spinner fa-spin"></i> Loading buses...</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h5><i class="fas fa-clock"></i> Quick Actions</h5>
+                </div>
+                <div class="card-body">
+                    <a href="{{ url_for('bus_tracking') }}" class="btn btn-primary w-100 mb-2">
+                        <i class="fas fa-search"></i> Track Specific Bus
+                    </a>
+                    <button class="btn btn-info w-100 mb-2" onclick="requestLocation()">
+                        <i class="fas fa-location-arrow"></i> Find Nearest Bus
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let map, busMarkers = [];
+
+// Initialize map
+function initMap() {
+    map = L.map('map').setView([11.1083711,76.992266], 9.67);
+    
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+    }).addTo(map);
+    
+    loadBuses();
+    setInterval(loadBuses, 10000); // Update every 10 seconds
+}
+
+function loadBuses() {
+    fetch('/api/bus_locations')
+        .then(response => response.json())
+        .then(buses => {
+            // Clear existing markers
+            busMarkers.forEach(marker => map.removeLayer(marker));
+            busMarkers = [];
+            
+            const busList = document.getElementById('bus-list');
+            busList.innerHTML = '';
+            
+            buses.forEach(bus => {
+                // Add marker to map
+                const marker = L.marker([bus.lat, bus.lng])
+                    .bindPopup(`
+                        <b>${bus.bus_number}</b><br>
+                        Driver: ${bus.driver}<br>
+                        Last Updated: ${new Date(bus.last_updated).toLocaleTimeString()}
+                    `);
+                marker.addTo(map);
+                busMarkers.push(marker);
+                
+                // Add to bus list
+                const busItem = document.createElement('div');
+                busItem.className = 'mb-2 p-2 border rounded';
+                busItem.innerHTML = `
+                    <strong>${bus.bus_number}</strong><br>
+                    <small class="text-muted">Driver: ${bus.driver}</small><br>
+                    <button class="btn btn-sm btn-outline-primary mt-1" onclick="centerMap(${bus.lat}, ${bus.lng})">
+                        <i class="fas fa-eye"></i> View on Map
+                    </button>
+                `;
+                busList.appendChild(busItem);
+            });
+            
+            if (buses.length === 0) {
+                busList.innerHTML = '<p class="text-muted">No active buses found</p>';
+            }
+        })
+        .catch(error => {
+            console.error('Error loading buses:', error);
+            document.getElementById('bus-list').innerHTML = '<p class="text-danger">Error loading buses</p>';
+        });
+}
+
+function centerMap(lat, lng) {
+    map.setView([lat, lng], 16);
+}
+
+function requestLocation() {
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(function(position) {
+            const userLat = position.coords.latitude;
+            const userLng = position.coords.longitude;
+            
+            // Add user location marker
+            const userMarker = L.marker([userLat, userLng], {
+                icon: L.divIcon({
+                    className: 'user-location-marker',
+                    html: '<i class="fas fa-user" style="color: red; font-size: 16px;"></i>',
+                    iconSize: [20, 20],
+                    iconAnchor: [10, 10]
+                })
+            }).addTo(map);
+            
+            userMarker.bindPopup('Your Location').openPopup();
+            map.setView([userLat, userLng], 15);
+        });
+    } else {
+        alert('Geolocation is not supported by this browser.');
+    }
+}
+
+// Initialize map when page loads
+document.addEventListener('DOMContentLoaded', initMap);
+</script>
+{% endblock %}

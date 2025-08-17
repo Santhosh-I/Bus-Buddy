@@ -1,0 +1,353 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-12">
+            <h2><i class="fas fa-steering-wheel"></i> Driver Dashboard</h2>
+            {% if bus %}
+                <p>Bus: <strong>{{ bus.bus_number }}</strong></p>
+            {% else %}
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle"></i> No bus assigned to you.
+                </div>
+            {% endif %}
+        </div>
+    </div>
+
+    {% if bus %}
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5><i class="fas fa-map-marked-alt"></i> Your Route</h5>
+                    <div>
+                        <button id="start-tracking" class="btn btn-success btn-sm">
+                            <i class="fas fa-play"></i> Start Tracking
+                        </button>
+                        <button id="stop-tracking" class="btn btn-danger btn-sm" style="display: none;">
+                            <i class="fas fa-stop"></i> Stop Tracking
+                        </button>
+                    </div>
+                </div>
+                <div class="card-body">
+                    <div id="driver-map" style="height: 400px;"></div>
+                    <div class="mt-3">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <p><strong>Status:</strong> <span id="tracking-status" class="text-warning">Not Tracking</span></p>
+                            </div>
+                            <div class="col-md-6">
+                                <p><strong>Last Update:</strong> <span id="last-update">Never</span></p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card">
+                    <div class="card-header">
+                        <h5><i class="fas fa-hand-paper"></i> Wait Requests</h5>
+                        <span class="badge bg-primary" id="request-count">{{ wait_requests|length }}</span>
+                    </div>
+                    <div class="card-body">
+                        <!-- Hidden data container -->
+                        <div id="bus-data" data-bus-id="{{ bus.id if bus else '' }}" style="display:none;"></div>
+                        
+                        <div id="wait-requests">
+                            {% for request in wait_requests %}
+                            <div class="alert alert-info" data-request-id="{{ request.id }}">
+                                <h6><i class="fas fa-user"></i> {{ request.user.username }}</h6>
+                                <p><i class="fas fa-map-marker-alt"></i> {{ request.stop.name }}</p>
+                                {% if request.message %}
+                                <p><strong>Message:</strong> {{ request.message }}</p>
+                                {% endif %}
+                                <small class="text-muted">{{ request.timestamp.strftime('%H:%M:%S') }}</small>
+                                <div class="mt-2">
+                                    <button class="btn btn-success btn-sm respond-btn" 
+                                            data-request-id="{{ request.id }}" 
+                                            data-response="acknowledge">
+                                        <i class="fas fa-check"></i> Wait
+                                    </button>
+                                    <button class="btn btn-danger btn-sm respond-btn" 
+                                            data-request-id="{{ request.id }}" 
+                                            data-response="decline">
+                                        <i class="fas fa-times"></i> Decline
+                                    </button>
+                                </div>
+                            </div>
+                            {% else %}
+                            <p class="text-muted">No pending requests</p>
+                            {% endfor %}
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+let driverMap, tracking = false, trackingInterval;
+
+// Event delegation for wait request buttons
+document.addEventListener('click', function(e) {
+    // Handle clicks on respond buttons or their children (icons)
+    const button = e.target.closest('.respond-btn');
+    if (!button) return;
+
+    const requestId = button.getAttribute('data-request-id');
+    const response = button.getAttribute('data-response');
+
+    if (!requestId || !response) {
+        alert('Invalid request data');
+        return;
+    }
+
+    console.log('Button clicked:', requestId, response); // Debug log
+    respondToRequest(parseInt(requestId), response);
+});
+
+function respondToRequest(requestId, response) {
+    console.log('Sending response:', requestId, response); // Debug log
+    
+    fetch('/api/respond_wait_request', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+            request_id: requestId, 
+            response: response 
+        })
+    })
+    .then(response => {
+        if (!response.ok) {
+            throw new Error('Network response was not ok');
+        }
+        return response.json();
+    })
+    .then(data => {
+        console.log('Response received:', data); // Debug log
+        
+        if (data.success) {
+            // Remove the request from the UI
+            const requestElement = document.querySelector(`[data-request-id="${requestId}"]`);
+            if (requestElement) {
+                const alertContainer = requestElement.closest('.alert');
+                if (alertContainer) {
+                    alertContainer.remove();
+                }
+            }
+            
+            // Update request count
+            const requestCount = document.getElementById('request-count');
+            if (requestCount) {
+                const currentCount = parseInt(requestCount.textContent) || 0;
+                requestCount.textContent = Math.max(0, currentCount - 1);
+            }
+            
+            // Show feedback
+            const action = response === 'acknowledge' ? 'acknowledged' : 'declined';
+            alert(`Request ${action} successfully!`);
+            
+            // Refresh the page to update the UI
+            setTimeout(() => {
+                location.reload();
+            }, 1000);
+            
+        } else {
+            alert(data.error || 'Error responding to request');
+        }
+    })
+    .catch(error => {
+        console.error('Error responding to request:', error);
+        alert('Error responding to request. Please try again.');
+    });
+}
+// Get bus ID from template
+function initDriverMap() {
+    driverMap = L.map('driver-map').setView([11.1083711,76.992266], 9.67);
+    
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+    }).addTo(driverMap);
+    
+    // Load route stops if bus exists
+    if (busId !== null) {
+        loadRouteStops(busId);
+    }
+}
+
+function loadRouteStops(busId) {
+    fetch(`/api/routes/${busId}`)
+        .then(response => response.json())
+        .then(stops => {
+            stops.forEach((stop, index) => {
+                const marker = L.marker([stop.lat, stop.lng])
+                    .bindPopup(`
+                        <b>${stop.name}</b><br>
+                        Order: ${stop.stop_order}<br>
+                        Estimated Time: ${stop.estimated_time}
+                    `);
+                marker.addTo(driverMap);
+                
+                // Add stop number
+                const numberMarker = L.divIcon({
+                    className: 'stop-number',
+                    html: `<div style="background: #007bff; color: white; border-radius: 50%; width: 25px; height: 25px; display: flex; align-items: center; justify-content: center; font-weight: bold;">${stop.stop_order}</div>`,
+                    iconSize: [25, 25],
+                    iconAnchor: [12, 12]
+                });
+                L.marker([stop.lat, stop.lng], { icon: numberMarker }).addTo(driverMap);
+            });
+        })
+        .catch(error => {
+            console.error('Error loading route stops:', error);
+        });
+}
+
+// Initialize map when page loads
+document.addEventListener('DOMContentLoaded', initDriverMap);
+
+// Rest of your existing functions (startTracking, stopTracking, etc.)...
+
+function loadRouteStops(busId) {
+    fetch(`/api/routes/${busId}`)
+        .then(response => response.json())
+        .then(stops => {
+            stops.forEach((stop, index) => {
+                const marker = L.marker([stop.lat, stop.lng])
+                    .bindPopup(`
+                        <b>${stop.name}</b><br>
+                        Order: ${stop.stop_order}<br>
+                        Estimated Time: ${stop.estimated_time}
+                    `);
+                marker.addTo(driverMap);
+                
+                // Add stop number
+                const numberMarker = L.divIcon({
+                    className: 'stop-number',
+                    html: `<div style="background: #007bff; color: white; border-radius: 50%; width: 25px; height: 25px; display: flex; align-items: center; justify-content: center; font-weight: bold;">${stop.stop_order}</div>`,
+                    iconSize: [25, 25],
+                    iconAnchor: [12, 12]
+                });
+                L.marker([stop.lat, stop.lng], { icon: numberMarker }).addTo(driverMap);
+            });
+        });
+}
+
+function startTracking() {
+    tracking = true;
+    document.getElementById('start-tracking').style.display = 'none';
+    document.getElementById('stop-tracking').style.display = 'inline-block';
+    document.getElementById('tracking-status').innerHTML = '<span class="text-success">Active</span>';
+    
+    updateLocation();
+    trackingInterval = setInterval(updateLocation, 5000); // Update every 5 seconds
+}
+
+function stopTracking() {
+    tracking = false;
+    document.getElementById('start-tracking').style.display = 'inline-block';
+    document.getElementById('stop-tracking').style.display = 'none';
+    document.getElementById('tracking-status').innerHTML = '<span class="text-warning">Not Tracking</span>';
+    
+    if (trackingInterval) {
+        clearInterval(trackingInterval);
+    }
+}
+
+function updateLocation() {
+    if (!tracking) return;
+    
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(function(position) {
+            const lat = position.coords.latitude;
+            const lng = position.coords.longitude;
+            
+            fetch('/api/update_location', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ lat: lat, lng: lng })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
+                    
+                    // Update map center to current location
+                    driverMap.setView([lat, lng], 15);
+                    
+                    // Add/update current location marker
+                    if (window.currentLocationMarker) {
+                        driverMap.removeLayer(window.currentLocationMarker);
+                    }
+                    
+                    window.currentLocationMarker = L.marker([lat, lng], {
+                        icon: L.divIcon({
+                            className: 'bus-location-marker',
+                            html: '<i class="fas fa-bus" style="color: #007bff; font-size: 20px;"></i>',
+                            iconSize: [30, 30],
+                            iconAnchor: [15, 15]
+                        })
+                    }).addTo(driverMap);
+                }
+            })
+            .catch(error => {
+                console.error('Error updating location:', error);
+            });
+        });
+    }
+}
+
+function respondToRequest(requestId, response) {
+    fetch('/api/respond_wait_request', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ 
+            request_id: requestId, 
+            response: response 
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            // Remove the request from the UI
+            const requestElement = document.querySelector(`[data-request-id="${requestId}"]`);
+            if (requestElement) {
+                requestElement.remove();
+            }
+            
+            // Update request count
+            const requestCount = document.getElementById('request-count');
+            requestCount.textContent = parseInt(requestCount.textContent) - 1;
+            
+            // Show feedback
+            const action = response === 'acknowledge' ? 'acknowledged' : 'declined';
+            alert(`Request ${action} successfully!`);
+        }
+    })
+    .catch(error => {
+        console.error('Error responding to request:', error);
+        alert('Error responding to request');
+    });
+}
+
+// Event listeners
+document.getElementById('start-tracking').addEventListener('click', startTracking);
+document.getElementById('stop-tracking').addEventListener('click', stopTracking);
+
+// Initialize map when page loads
+document.addEventListener('DOMContentLoaded', initDriverMap);
+</script>
+{% endblock %}

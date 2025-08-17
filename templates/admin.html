@@ -1,0 +1,410 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-md-12">
+            <h2><i class="fas fa-cogs"></i> Admin Dashboard</h2>
+        </div>
+    </div>
+
+    <!-- Stats Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h3>{{ buses|length }}</h3>
+                            <p class="mb-0">Total Buses</p>
+                        </div>
+                        <i class="fas fa-bus fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h3>{{ users|selectattr("role", "equalto", "driver")|list|length }}</h3>
+                            <p class="mb-0">Drivers</p>
+                        </div>
+                        <i class="fas fa-user-tie fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h3>{{ users|selectattr("role", "equalto", "student")|list|length }}</h3>
+                            <p class="mb-0">Students</p>
+                        </div>
+                        <i class="fas fa-graduation-cap fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <h3>{{ routes|length }}</h3>
+                            <p class="mb-0">Routes</p>
+                        </div>
+                        <i class="fas fa-route fa-2x"></i>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <ul class="nav nav-tabs" id="adminTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="buses-tab" data-bs-toggle="tab" data-bs-target="#buses" type="button">
+                <i class="fas fa-bus"></i> Buses
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="users-tab" data-bs-toggle="tab" data-bs-target="#users" type="button">
+                <i class="fas fa-users"></i> Users
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="routes-tab" data-bs-toggle="tab" data-bs-target="#routes" type="button">
+                <i class="fas fa-route"></i> Routes
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="analytics-tab" data-bs-toggle="tab" data-bs-target="#analytics" type="button">
+                <i class="fas fa-chart-bar"></i> Analytics
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content mt-3" id="adminTabsContent">
+        <!-- Buses Tab -->
+        <div class="tab-pane fade show active" id="buses" role="tabpanel">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5>Bus Management</h5>
+                    <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#addBusModal">
+                        <i class="fas fa-plus"></i> Add Bus
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Bus Number</th>
+                                    <th>Driver</th>
+                                    <th>Status</th>
+                                    <th>Last Location</th>
+                                    <th>Last Updated</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for bus in buses %}
+                                <tr>
+                                    <td><strong>{{ bus.bus_number }}</strong></td>
+                                    <td>{{ bus.driver.username if bus.driver else 'Not Assigned' }}</td>
+                                    <td>
+                                        {% if bus.is_active %}
+                                            <span class="badge bg-success">Active</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">Inactive</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if bus.current_lat and bus.current_lng %}
+                                            {{ "%.4f"|format(bus.current_lat) }}, {{ "%.4f"|format(bus.current_lng) }}
+                                        {% else %}
+                                            Not Available
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if bus.last_updated %}
+                                            {{ bus.last_updated.strftime('%Y-%m-%d %H:%M') }}
+                                        {% else %}
+                                            Never
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-primary view-bus-btn" 
+                                                data-lat="{{ bus.current_lat if bus.current_lat else '' }}" 
+                                                data-lng="{{ bus.current_lng if bus.current_lng else '' }}">
+                                            <i class="fas fa-map-marker-alt"></i>
+                                        </button>
+
+                                            <i class="fas fa-map-marker-alt"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-warning">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Users Tab -->
+        <div class="tab-pane fade" id="users" role="tabpanel">
+            <div class="card">
+                <div class="card-header">
+                    <h5>User Management</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Username</th>
+                                    <th>Email</th>
+                                    <th>Role</th>
+                                    <th>Phone</th>
+                                    <th>Joined</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for user in users %}
+                                <tr>
+                                    <td><strong>{{ user.username }}</strong></td>
+                                    <td>{{ user.email }}</td>
+                                    <td>
+                                        <span class="badge bg-{% if user.role == 'admin' %}danger{% elif user.role == 'driver' %}warning{% else %}info{% endif %}">
+                                            {{ user.role.title() }}
+                                        </span>
+                                    </td>
+                                    <td>{{ user.phone or 'Not Provided' }}</td>
+                                    <td>{{ user.created_at.strftime('%Y-%m-%d') }}</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-warning">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Routes Tab -->
+        <div class="tab-pane fade" id="routes" role="tabpanel">
+            <div class="card">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h5>Route Management</h5>
+                    <button class="btn btn-primary btn-sm">
+                        <i class="fas fa-plus"></i> Add Route
+                    </button>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>Route Name</th>
+                                    <th>Bus</th>
+                                    <th>Start Time</th>
+                                    <th>End Time</th>
+                                    <th>Stops</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for route in routes %}
+                                <tr>
+                                    <td><strong>{{ route.route_name }}</strong></td>
+                                    <td>{{ route.bus.bus_number }}</td>
+                                    <td>{{ route.start_time }}</td>
+                                    <td>{{ route.end_time }}</td>
+                                    <td>{{ route.stops|length }} stops</td>
+                                    <td>
+                                        <button class="btn btn-sm btn-outline-info">
+                                            <i class="fas fa-eye"></i>
+                                        </button>
+                                        <button class="btn btn-sm btn-outline-warning">
+                                            <i class="fas fa-edit"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Analytics Tab -->
+        <div class="tab-pane fade" id="analytics" role="tabpanel">
+            <div class="row">
+                <div class="col-md-12">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5>System Overview Map</h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="admin-map" style="height: 500px;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Add Bus Modal -->
+<div class="modal fade" id="addBusModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add New Bus</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <form id="add-bus-form">
+                    <div class="mb-3">
+                        <label for="bus-number" class="form-label">Bus Number</label>
+                        <input type="text" class="form-control" id="bus-number" required>
+                    </div>
+                    <div class="mb-3">
+                        <label for="driver-select" class="form-label">Assign Driver</label>
+                        <select id="driver-select" class="form-select">
+                            <option value="">Select Driver (Optional)</option>
+                            {% for user in users %}
+                                {% if user.role == 'driver' %}
+                                <option value="{{ user.id }}">{{ user.username }}</option>
+                                {% endif %}
+                            {% endfor %}
+                        </select>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="button" class="btn btn-primary" onclick="addBus()">Add Bus</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let adminMap;
+
+function initAdminMap() {
+    adminMap = L.map('admin-map').setView([40.7589, -73.9851], 12);
+    
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+    }).addTo(adminMap);
+    
+    loadAllBusesOnMap();
+}
+
+function loadAllBusesOnMap() {
+    fetch('/api/bus_locations')
+        .then(response => response.json())
+        .then(buses => {
+            buses.forEach(bus => {
+                const marker = L.marker([bus.lat, bus.lng], {
+                    icon: L.divIcon({
+                        className: 'admin-bus-marker',
+                        html: '<i class="fas fa-bus" style="color: #007bff; font-size: 20px;"></i>',
+                        iconSize: [25, 25],
+                        iconAnchor: [12, 12]
+                    })
+                }).addTo(adminMap);
+                
+                marker.bindPopup(`
+                    <b>${bus.bus_number}</b><br>
+                    Driver: ${bus.driver}<br>
+                    Last Updated: ${new Date(bus.last_updated).toLocaleTimeString()}
+                `);
+            });
+        });
+}
+
+function viewBusOnMap(lat, lng) {
+    // Handle null or string 'null' values
+    if (lat === null || lat === 'null' || lng === null || lng === 'null' || !lat || !lng) {
+        alert('Location not available for this bus');
+        return;
+    }
+    
+    // Convert to numbers if they're strings
+    lat = parseFloat(lat);
+    lng = parseFloat(lng);
+    
+    // Validate coordinates
+    if (isNaN(lat) || isNaN(lng)) {
+        alert('Invalid location data');
+        return;
+    }
+    
+    // Switch to analytics tab
+    const analyticsTab = new bootstrap.Tab(document.getElementById('analytics-tab'));
+    analyticsTab.show();
+    
+    // Wait for tab to show, then center map
+    setTimeout(() => {
+        if (adminMap) {
+            adminMap.setView([lat, lng], 16);
+        }
+    }, 100);
+}
+
+
+function addBus() {
+    const busNumber = document.getElementById('bus-number').value;
+    const driverId = document.getElementById('driver-select').value;
+    
+    if (!busNumber) {
+        alert('Please enter bus number');
+        return;
+    }
+    
+    // Here you would typically send a POST request to add the bus
+    // For now, we'll just show a success message
+    alert('Bus add functionality would be implemented here');
+    bootstrap.Modal.getInstance(document.getElementById('addBusModal')).hide();
+}
+
+// Initialize admin map when analytics tab is shown
+document.getElementById('analytics-tab').addEventListener('shown.bs.tab', function () {
+    if (!adminMap) {
+        setTimeout(initAdminMap, 100);
+    }
+});
+
+// Add this to the admin.html script section
+document.addEventListener('click', function(e) {
+    if (e.target.classList.contains('view-bus-btn')) {
+        const lat = e.target.dataset.lat;
+        const lng = e.target.dataset.lng;
+        
+        if (lat && lng && lat !== '' && lng !== '') {
+            viewBusOnMap(parseFloat(lat), parseFloat(lng));
+        } else {
+            alert('Location not available for this bus');
+        }
+    }
+});
+
+</script>
+{% endblock %}
