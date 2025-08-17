@@ -140,10 +140,9 @@ flask run
 ## 🤝 Contributors
 
 * SANTHOSH-I
-* Developed By ###Tech-Knox
+* Developed By "Tech-Knox"
 
 ---
-
 ## 🙏 Acknowledgements
 
 * [Leaflet.js](https://leafletjs.com)
