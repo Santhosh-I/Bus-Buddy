@@ -4,18 +4,45 @@
 <div class="container mt-4">
     <div class="row">
         <div class="col-md-12">
-            <h2><i class="fas fa-search-location"></i> Bus Tracking</h2>
+            <h2><i class="fas fa-search-location"></i> Live Bus Tracking</h2>
+            <div class="alert alert-info" id="location-status">
+                <i class="fas fa-location-arrow"></i> <span id="status-text">Getting your location...</span>
+            </div>
         </div>
     </div>
 
     <div class="row">
         <div class="col-md-8">
             <div class="card">
-                <div class="card-header">
+                <div class="card-header d-flex justify-content-between align-items-center">
                     <h5><i class="fas fa-map"></i> Live Tracking Map</h5>
+                    <div>
+                        <button id="center-user" class="btn btn-sm btn-outline-primary">
+                            <i class="fas fa-crosshairs"></i> My Location
+                        </button>
+                        <button id="refresh-buses" class="btn btn-sm btn-outline-success">
+                            <i class="fas fa-sync"></i> Refresh
+                        </button>
+                    </div>
                 </div>
                 <div class="card-body">
                     <div id="tracking-map" style="height: 500px;"></div>
+                    <div class="mt-3">
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-user text-danger me-2"></i>
+                                    <span>Your Location</span>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="d-flex align-items-center">
+                                    <i class="fas fa-bus text-primary me-2"></i>
+                                    <span>Active Buses</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -37,6 +64,7 @@
                         <div class="alert alert-info">
                             <h6 id="selected-bus-number"></h6>
                             <p id="selected-bus-driver"></p>
+                            <p id="distance-to-bus"></p>
                         </div>
                     </div>
                 </div>
@@ -58,8 +86,8 @@
                     <h5><i class="fas fa-hand-paper"></i> Quick Actions</h5>
                 </div>
                 <div class="card-body">
-                    <button id="find-nearest-stop" class="btn btn-info w-100 mb-2" disabled>
-                        <i class="fas fa-location-arrow"></i> Find Nearest Stop
+                    <button id="find-nearest-bus" class="btn btn-info w-100 mb-2">
+                        <i class="fas fa-location-arrow"></i> Find Nearest Bus
                     </button>
                     <button id="wait-request-btn" class="btn btn-warning w-100" disabled>
                         <i class="fas fa-hand-paper"></i> Send Wait Request
@@ -103,36 +131,150 @@
 <script>
 let trackingMap, selectedBusId, selectedBusMarker, routeStops = [];
 let userLocation = null;
+let userMarker = null;
+let busMarkers = {};
 
 function initTrackingMap() {
-    trackingMap = L.map('tracking-map').setView([11.1083711,76.992266], 9.67);
+    // Initialize map
+    trackingMap = L.map('tracking-map').setView([11.1083711, 76.992266], 10);
     
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap contributors'
     }).addTo(trackingMap);
     
     // Get user location
+    getUserLocation();
+    
+    // Load bus locations initially and set up refresh
+    loadBusLocations();
+    setInterval(loadBusLocations, 10000); // Refresh every 10 seconds
+    
+    // Update user location periodically
     if (navigator.geolocation) {
+        setInterval(updateUserLocation, 30000); // Update every 30 seconds
+    }
+}
+
+function getUserLocation() {
+    if (navigator.geolocation) {
+        document.getElementById('status-text').textContent = 'Getting your location...';
+        
         navigator.geolocation.getCurrentPosition(function(position) {
             userLocation = {
                 lat: position.coords.latitude,
                 lng: position.coords.longitude
             };
             
-            // Add user location marker
-            const userMarker = L.marker([userLocation.lat, userLocation.lng], {
-                icon: L.divIcon({
-                    className: 'user-location-marker',
-                    html: '<i class="fas fa-user" style="color: #e74c3c; font-size: 18px;"></i>',
-                    iconSize: [25, 25],
-                    iconAnchor: [12, 12]
-                })
-            }).addTo(trackingMap);
+            // Add/update user location marker
+            if (userMarker) {
+                userMarker.setLatLng([userLocation.lat, userLocation.lng]);
+            } else {
+                userMarker = L.marker([userLocation.lat, userLocation.lng], {
+                    icon: L.divIcon({
+                        className: 'user-location-marker',
+                        html: '<i class="fas fa-user" style="color: #e74c3c; font-size: 20px; text-shadow: 0 0 3px #fff;"></i>',
+                        iconSize: [25, 25],
+                        iconAnchor: [12, 12]
+                    })
+                }).addTo(trackingMap);
+                
+                userMarker.bindPopup('📍 Your Location');
+            }
             
-            userMarker.bindPopup('Your Location');
+            // Center map on user location
             trackingMap.setView([userLocation.lat, userLocation.lng], 14);
+            
+            // Update status
+            document.getElementById('status-text').textContent = 'Location found! Tracking buses...';
+            document.getElementById('location-status').className = 'alert alert-success';
+            
+        }, function(error) {
+            console.error('Geolocation error:', error);
+            document.getElementById('status-text').textContent = 'Location access denied. Showing default view.';
+            document.getElementById('location-status').className = 'alert alert-warning';
+        }, {
+            enableHighAccuracy: true,
+            timeout: 10000,
+            maximumAge: 60000
+        });
+    } else {
+        document.getElementById('status-text').textContent = 'Geolocation not supported by your browser.';
+        document.getElementById('location-status').className = 'alert alert-danger';
+    }
+}
+
+function updateUserLocation() {
+    if (navigator.geolocation && userMarker) {
+        navigator.geolocation.getCurrentPosition(function(position) {
+            userLocation = {
+                lat: position.coords.latitude,
+                lng: position.coords.longitude
+            };
+            
+            userMarker.setLatLng([userLocation.lat, userLocation.lng]);
         });
     }
+}
+
+function loadBusLocations() {
+    fetch('/api/bus_locations')
+        .then(response => response.json())
+        .then(buses => {
+            // Remove markers for buses no longer active
+            Object.keys(busMarkers).forEach(busId => {
+                if (!buses.find(b => b.id == busId)) {
+                    trackingMap.removeLayer(busMarkers[busId]);
+                    delete busMarkers[busId];
+                }
+            });
+            
+            // Add/update bus markers
+            buses.forEach(bus => {
+                const lat = bus.lat;
+                const lng = bus.lng;
+                
+                if (busMarkers[bus.id]) {
+                    // Update existing marker
+                    busMarkers[bus.id].setLatLng([lat, lng]);
+                    busMarkers[bus.id].setPopupContent(`
+                        <b>🚌 ${bus.bus_number}</b><br>
+                        Driver: ${bus.driver}<br>
+                        Last Updated: ${new Date(bus.last_updated).toLocaleTimeString()}
+                        ${userLocation ? `<br>Distance: ${calculateDistance(userLocation.lat, userLocation.lng, lat, lng).toFixed(0)}m` : ''}
+                    `);
+                } else {
+                    // Create new marker
+                    busMarkers[bus.id] = L.marker([lat, lng], {
+                        icon: L.divIcon({
+                            className: 'bus-location-marker',
+                            html: '<i class="fas fa-bus" style="color: #007bff; font-size: 22px; text-shadow: 0 0 3px #fff;"></i>',
+                            iconSize: [30, 30],
+                            iconAnchor: [15, 15]
+                        })
+                    }).addTo(trackingMap);
+                    
+                    busMarkers[bus.id].bindPopup(`
+                        <b>🚌 ${bus.bus_number}</b><br>
+                        Driver: ${bus.driver}<br>
+                        Last Updated: ${new Date(bus.last_updated).toLocaleTimeString()}
+                        ${userLocation ? `<br>Distance: ${calculateDistance(userLocation.lat, userLocation.lng, lat, lng).toFixed(0)}m` : ''}
+                    `);
+                }
+            });
+            
+            // Update distance for selected bus
+            if (selectedBusId && userLocation) {
+                const selectedBus = buses.find(b => b.id == selectedBusId);
+                if (selectedBus) {
+                    const distance = calculateDistance(userLocation.lat, userLocation.lng, selectedBus.lat, selectedBus.lng);
+                    document.getElementById('distance-to-bus').textContent = `Distance: ${distance.toFixed(0)}m away`;
+                }
+            }
+            
+        })
+        .catch(error => {
+            console.error('Error loading bus locations:', error);
+        });
 }
 
 function loadSelectedBus() {
@@ -142,66 +284,31 @@ function loadSelectedBus() {
     if (!selectedBusId) {
         document.getElementById('bus-info').style.display = 'none';
         document.getElementById('route-stops').innerHTML = '<p class="text-muted">Select a bus to view stops</p>';
-        document.getElementById('find-nearest-stop').disabled = true;
         document.getElementById('wait-request-btn').disabled = true;
-        
-        if (selectedBusMarker) {
-            trackingMap.removeLayer(selectedBusMarker);
-        }
         return;
     }
     
     // Show bus info
     const selectedOption = busSelect.options[busSelect.selectedIndex];
     const busNumber = selectedOption.text.split(' - ')[0];
-    const driver = selectedOption.text.split(' - ');
+    const driver = selectedOption.text.split(' - ')[1];
     
     document.getElementById('selected-bus-number').textContent = busNumber;
     document.getElementById('selected-bus-driver').textContent = `Driver: ${driver}`;
     document.getElementById('bus-info').style.display = 'block';
     
-    // Enable buttons
-    document.getElementById('find-nearest-stop').disabled = false;
+    // Enable wait request button
     document.getElementById('wait-request-btn').disabled = false;
     
-    // Load bus location and route
-    loadBusLocation(selectedBusId);
+    // Load route stops
     loadRouteStops(selectedBusId);
     
-    // Start tracking updates
-    setInterval(() => loadBusLocation(selectedBusId), 10000);
-}
-
-function loadBusLocation(busId) {
-    fetch('/api/bus_locations')
-        .then(response => response.json())
-        .then(buses => {
-            const bus = buses.find(b => b.id == busId);
-            if (bus) {
-                // Remove existing marker
-                if (selectedBusMarker) {
-                    trackingMap.removeLayer(selectedBusMarker);
-                }
-                
-                // Add new marker
-                selectedBusMarker = L.marker([bus.lat, bus.lng], {
-                    icon: L.divIcon({
-                        className: 'selected-bus-marker',
-                        html: '<i class="fas fa-bus" style="color: #007bff; font-size: 24px;"></i>',
-                        iconSize: [30, 30],
-                        iconAnchor: [15, 15]
-                    })
-                }).addTo(trackingMap);
-                
-                selectedBusMarker.bindPopup(`
-                    <b>${bus.bus_number}</b><br>
-                    Driver: ${bus.driver}<br>
-                    Last Updated: ${new Date(bus.last_updated).toLocaleTimeString()}
-                `);
-                
-                trackingMap.setView([bus.lat, bus.lng], 15);
-            }
-        });
+    // Center map on selected bus if available
+    if (busMarkers[selectedBusId]) {
+        const busLatLng = busMarkers[selectedBusId].getLatLng();
+        trackingMap.setView([busLatLng.lat, busLatLng.lng], 15);
+        busMarkers[selectedBusId].openPopup();
+    }
 }
 
 function loadRouteStops(busId) {
@@ -222,8 +329,15 @@ function loadRouteStops(busId) {
                 stopDiv.className = 'mb-2 p-2 border rounded';
                 
                 let etaText = 'Calculating...';
+                let distanceText = '';
+                
                 if (stop.eta !== null) {
                     etaText = stop.eta > 0 ? `${stop.eta} min` : 'Arrived';
+                }
+                
+                if (userLocation) {
+                    const distance = calculateDistance(userLocation.lat, userLocation.lng, stop.lat, stop.lng);
+                    distanceText = `<br><small class="text-muted">Distance from you: ${distance.toFixed(0)}m</small>`;
                 }
                 
                 stopDiv.innerHTML = `
@@ -231,6 +345,7 @@ function loadRouteStops(busId) {
                         <div>
                             <strong>${stop.name}</strong><br>
                             <small class="text-muted">Scheduled: ${stop.estimated_time}</small>
+                            ${distanceText}
                         </div>
                         <div class="text-end">
                             <span class="badge bg-info">ETA: ${etaText}</span>
@@ -256,39 +371,60 @@ function loadRouteStops(busId) {
                 }).addTo(trackingMap);
                 
                 stopMarker.bindPopup(`
-                    <b>${stop.name}</b><br>
+                    <b>🚏 ${stop.name}</b><br>
                     Order: ${stop.stop_order}<br>
                     Scheduled: ${stop.estimated_time}<br>
                     ETA: ${etaText}
+                    ${userLocation ? `<br>Distance from you: ${calculateDistance(userLocation.lat, userLocation.lng, stop.lat, stop.lng).toFixed(0)}m` : ''}
                 `);
             });
             
             if (stops.length === 0) {
                 stopsDiv.innerHTML = '<p class="text-muted">No stops found for this route</p>';
             }
+        })
+        .catch(error => {
+            console.error('Error loading route stops:', error);
         });
 }
 
-function findNearestStop() {
-    if (!userLocation || routeStops.length === 0) {
-        alert('Location not available or no stops loaded');
+function findNearestBus() {
+    if (!userLocation) {
+        alert('Your location is not available');
         return;
     }
     
-    let nearestStop = null;
-    let minDistance = Infinity;
-    
-    routeStops.forEach(stop => {
-        const distance = calculateDistance(userLocation.lat, userLocation.lng, stop.lat, stop.lng);
-        if (distance < minDistance) {
-            minDistance = distance;
-            nearestStop = stop;
-        }
+    const buses = Object.keys(busMarkers).map(busId => {
+        const marker = busMarkers[busId];
+        const latLng = marker.getLatLng();
+        const distance = calculateDistance(userLocation.lat, userLocation.lng, latLng.lat, latLng.lng);
+        return { id: busId, marker, distance };
     });
     
-    if (nearestStop) {
-        trackingMap.setView([nearestStop.lat, nearestStop.lng], 16);
-        alert(`Nearest stop: ${nearestStop.name} (${Math.round(minDistance)}m away)`);
+    if (buses.length === 0) {
+        alert('No active buses found');
+        return;
+    }
+    
+    // Find nearest bus
+    const nearestBus = buses.reduce((nearest, current) => 
+        current.distance < nearest.distance ? current : nearest
+    );
+    
+    // Center map on nearest bus
+    const latLng = nearestBus.marker.getLatLng();
+    trackingMap.setView([latLng.lat, latLng.lng], 16);
+    nearestBus.marker.openPopup();
+    
+    alert(`Nearest bus is ${nearestBus.distance.toFixed(0)}m away`);
+}
+
+function centerOnUser() {
+    if (userLocation && userMarker) {
+        trackingMap.setView([userLocation.lat, userLocation.lng], 15);
+        userMarker.openPopup();
+    } else {
+        alert('Your location is not available');
     }
 }
 
@@ -341,7 +477,9 @@ function sendWaitRequest() {
 
 // Event listeners
 document.getElementById('bus-select').addEventListener('change', loadSelectedBus);
-document.getElementById('find-nearest-stop').addEventListener('click', findNearestStop);
+document.getElementById('find-nearest-bus').addEventListener('click', findNearestBus);
+document.getElementById('center-user').addEventListener('click', centerOnUser);
+document.getElementById('refresh-buses').addEventListener('click', loadBusLocations);
 document.getElementById('wait-request-btn').addEventListener('click', () => {
     const modal = new bootstrap.Modal(document.getElementById('waitRequestModal'));
     modal.show();
@@ -351,4 +489,27 @@ document.getElementById('send-wait-request').addEventListener('click', sendWaitR
 // Initialize map when page loads
 document.addEventListener('DOMContentLoaded', initTrackingMap);
 </script>
+
+<style>
+.user-location-marker i {
+    color: #e74c3c !important;
+    font-size: 20px !important;
+    text-shadow: 0 0 3px #fff;
+}
+
+.bus-location-marker i {
+    color: #007bff !important;
+    font-size: 22px !important;
+    text-shadow: 0 0 3px #fff;
+}
+
+.stop-marker div {
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+#tracking-map {
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+</style>
 {% endblock %}

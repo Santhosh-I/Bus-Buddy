@@ -70,7 +70,7 @@ def create_tables():
         # Create sample route
         route = Route(
             bus_id=bus.id,
-            route_name='Main Campus Route',
+            route_name='Vadavalli to KGISL Campus',
             start_time='08:00',
             end_time='18:00'
         )
@@ -80,10 +80,12 @@ def create_tables():
         
         # Create sample stops
         stops = [
-            Stop(route_id=route.id, name='Main Gate', lat=40.7589, lng=-73.9851, stop_order=1, estimated_time='08:00'),
-            Stop(route_id=route.id, name='Library', lat=40.7614, lng=-73.9776, stop_order=2, estimated_time='08:10'),
-            Stop(route_id=route.id, name='Cafeteria', lat=40.7505, lng=-73.9934, stop_order=3, estimated_time='08:20'),
-            Stop(route_id=route.id, name='Sports Complex', lat=40.7282, lng=-74.0776, stop_order=4, estimated_time='08:30')
+            Stop(route_id=route.id, name='Vadavalli', lat=40.7589, lng=-73.9851, stop_order=1, estimated_time='08:00'),
+            Stop(route_id=route.id, name='PN pudur', lat=40.7614, lng=-73.9776, stop_order=2, estimated_time='08:10'),
+            Stop(route_id=route.id, name='Edarpalayam', lat=40.7505, lng=-73.9934, stop_order=3, estimated_time='08:20'),
+            Stop(route_id=route.id, name='Goundapalayam', lat=40.7282, lng=-74.0776, stop_order=4, estimated_time='08:30'),
+            Stop(route_id=route.id, name='Thudiyalore', lat=40.7282, lng=-74.0776, stop_order=4, estimated_time='08:40'),
+            Stop(route_id=route.id, name='Kgisl Campus', lat=40.7282, lng=-74.0776, stop_order=4, estimated_time='08:50')
         ]
         
         db.session.add_all(stops)

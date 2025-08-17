@@ -99,7 +99,7 @@ let busId = null;
 let notificationSound;
 try {
     notificationSound = new Audio('/static/sounds/notification.mp3');
-    notificationSound.volume = 0.5;
+    notificationSound.volume = 1;
 } catch (e) {
     // Fallback: create beep sound programmatically
     notificationSound = createBeepSound();
