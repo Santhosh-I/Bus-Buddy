@@ -401,6 +401,38 @@ def get_route_stops(bus_id):
     except Exception as e:
         print(f"Error in get_route_stops: {e}")
         return jsonify({'error': 'Internal server error'}), 500
+    
+@app.route('/api/driver/wait_requests')
+@login_required
+def get_driver_wait_requests():
+    if current_user.role != 'driver':
+        return jsonify({'error': 'Access denied'}), 403
+    
+    bus = Bus.query.filter_by(driver_id=current_user.id).first()
+    if not bus:
+        return jsonify([])
+    
+    wait_requests = WaitRequest.query.filter_by(
+        bus_id=bus.id, 
+        acknowledged=False, 
+        declined=False
+    ).order_by(WaitRequest.timestamp.desc()).all()
+    
+    requests_data = []
+    for req in wait_requests:
+        requests_data.append({
+            'id': req.id,
+            'user': {
+                'username': req.user.username
+            },
+            'stop': {
+                'name': req.stop.name
+            },
+            'message': req.message,
+            'timestamp': req.timestamp.isoformat()
+        })
+    
+    return jsonify(requests_data)
 
 # Add a health check route
 @app.route('/health')

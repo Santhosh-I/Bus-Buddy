@@ -48,44 +48,41 @@
 
         <div class="col-md-4">
             <div class="card">
-                <div class="card">
-                    <div class="card-header">
-                        <h5><i class="fas fa-hand-paper"></i> Wait Requests</h5>
-                        <span class="badge bg-primary" id="request-count">{{ wait_requests|length }}</span>
-                    </div>
-                    <div class="card-body">
-                        <!-- Hidden data container -->
-                        <div id="bus-data" data-bus-id="{{ bus.id if bus else '' }}" style="display:none;"></div>
-                        
-                        <div id="wait-requests">
-                            {% for request in wait_requests %}
-                            <div class="alert alert-info" data-request-id="{{ request.id }}">
-                                <h6><i class="fas fa-user"></i> {{ request.user.username }}</h6>
-                                <p><i class="fas fa-map-marker-alt"></i> {{ request.stop.name }}</p>
-                                {% if request.message %}
-                                <p><strong>Message:</strong> {{ request.message }}</p>
-                                {% endif %}
-                                <small class="text-muted">{{ request.timestamp.strftime('%H:%M:%S') }}</small>
-                                <div class="mt-2">
-                                    <button class="btn btn-success btn-sm respond-btn" 
-                                            data-request-id="{{ request.id }}" 
-                                            data-response="acknowledge">
-                                        <i class="fas fa-check"></i> Wait
-                                    </button>
-                                    <button class="btn btn-danger btn-sm respond-btn" 
-                                            data-request-id="{{ request.id }}" 
-                                            data-response="decline">
-                                        <i class="fas fa-times"></i> Decline
-                                    </button>
-                                </div>
+                <div class="card-header">
+                    <h5><i class="fas fa-hand-paper"></i> Wait Requests</h5>
+                    <span class="badge bg-primary" id="request-count">{{ wait_requests|length }}</span>
+                </div>
+                <div class="card-body">
+                    <!-- Hidden data container -->
+                    <div id="bus-data" data-bus-id="{{ bus.id if bus else '' }}" style="display:none;"></div>
+                    
+                    <div id="wait-requests">
+                        {% for request in wait_requests %}
+                        <div class="alert alert-info" data-request-id="{{ request.id }}">
+                            <h6><i class="fas fa-user"></i> {{ request.user.username }}</h6>
+                            <p><i class="fas fa-map-marker-alt"></i> {{ request.stop.name }}</p>
+                            {% if request.message %}
+                            <p><strong>Message:</strong> {{ request.message }}</p>
+                            {% endif %}
+                            <small class="text-muted">{{ request.timestamp.strftime('%H:%M:%S') }}</small>
+                            <div class="mt-2">
+                                <button class="btn btn-success btn-sm respond-btn" 
+                                        data-request-id="{{ request.id }}" 
+                                        data-response="acknowledge">
+                                    <i class="fas fa-check"></i> Wait
+                                </button>
+                                <button class="btn btn-danger btn-sm respond-btn" 
+                                        data-request-id="{{ request.id }}" 
+                                        data-response="decline">
+                                    <i class="fas fa-times"></i> Decline
+                                </button>
                             </div>
-                            {% else %}
-                            <p class="text-muted">No pending requests</p>
-                            {% endfor %}
                         </div>
+                        {% else %}
+                        <p class="text-muted">No pending requests</p>
+                        {% endfor %}
                     </div>
                 </div>
-
             </div>
         </div>
     </div>
@@ -94,10 +91,164 @@
 
 <script>
 let driverMap, tracking = false, trackingInterval;
+let currentWaitRequestCount = {{ wait_requests|length }};
+let pollInterval;
+let busId = null;
+
+// Notification sound - fallback to beep if file doesn't exist
+let notificationSound;
+try {
+    notificationSound = new Audio('/static/sounds/notification.mp3');
+    notificationSound.volume = 0.5;
+} catch (e) {
+    // Fallback: create beep sound programmatically
+    notificationSound = createBeepSound();
+}
+
+// Create a simple beep sound programmatically
+function createBeepSound() {
+    const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+    return {
+        play: function() {
+            try {
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+                
+                oscillator.frequency.value = 800; // Frequency in Hz
+                gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+                
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.5);
+            } catch (e) {
+                console.log('Audio context error:', e);
+            }
+        }
+    };
+}
+
+// Poll for new wait requests every 3 seconds
+function pollWaitRequests() {
+    fetch('/api/driver/wait_requests')
+        .then(response => response.json())
+        .then(data => {
+            const newCount = data.length;
+            
+            // Check if new request arrived
+            if (newCount > currentWaitRequestCount) {
+                // New request! Play notification sound
+                try {
+                    notificationSound.play();
+                } catch (e) {
+                    console.log('Could not play notification sound');
+                }
+                
+                // Show browser notification if permission granted
+                if ('Notification' in window && Notification.permission === 'granted') {
+                    new Notification('New Wait Request!', {
+                        body: `You have ${newCount} pending wait requests`,
+                        icon: '/static/favicon.ico'
+                    });
+                }
+                
+                // Flash the page title
+                flashTitle();
+            }
+            
+            // Update the UI if count changed
+            if (newCount !== currentWaitRequestCount) {
+                currentWaitRequestCount = newCount;
+                updateWaitRequestsUI(data);
+                updateRequestCount(newCount);
+            }
+        })
+        .catch(error => {
+            console.error('Error polling wait requests:', error);
+        });
+}
+
+// Flash page title to get attention
+function flashTitle() {
+    const originalTitle = document.title;
+    let isFlashing = false;
+    
+    const flashInterval = setInterval(() => {
+        document.title = isFlashing ? originalTitle : '🔔 NEW REQUEST!';
+        isFlashing = !isFlashing;
+    }, 1000);
+    
+    // Stop flashing after 10 seconds
+    setTimeout(() => {
+        clearInterval(flashInterval);
+        document.title = originalTitle;
+    }, 10000);
+}
+
+// Update the wait requests UI
+function updateWaitRequestsUI(requests) {
+    const container = document.getElementById('wait-requests');
+    if (!container) return;
+    
+    // Add fade effect
+    container.style.opacity = '0.5';
+    
+    setTimeout(() => {
+        container.innerHTML = '';
+        
+        if (requests.length === 0) {
+            container.innerHTML = '<p class="text-muted">No pending requests</p>';
+        } else {
+            requests.forEach(req => {
+                const requestTime = new Date(req.timestamp).toLocaleTimeString();
+                const requestHTML = `
+                <div class="alert alert-info animate-fade-in" data-request-id="${req.id}">
+                    <h6><i class="fas fa-user"></i> ${req.user.username}</h6>
+                    <p><i class="fas fa-map-marker-alt"></i> ${req.stop.name}</p>
+                    ${req.message ? `<p><strong>Message:</strong> ${req.message}</p>` : ''}
+                    <small class="text-muted">${requestTime}</small>
+                    <div class="mt-2">
+                        <button class="btn btn-success btn-sm respond-btn" 
+                                data-request-id="${req.id}" 
+                                data-response="acknowledge">
+                            <i class="fas fa-check"></i> Wait
+                        </button>
+                        <button class="btn btn-danger btn-sm respond-btn" 
+                                data-request-id="${req.id}" 
+                                data-response="decline">
+                            <i class="fas fa-times"></i> Decline
+                        </button>
+                    </div>
+                </div>`;
+                container.innerHTML += requestHTML;
+            });
+        }
+        
+        // Restore opacity
+        container.style.opacity = '1';
+    }, 200);
+}
+
+// Update request count badge
+function updateRequestCount(count) {
+    const badge = document.getElementById('request-count');
+    if (badge) {
+        badge.textContent = count;
+        
+        // Add pulse animation for new requests
+        if (count > 0) {
+            badge.classList.add('pulse-animation');
+            setTimeout(() => {
+                badge.classList.remove('pulse-animation');
+            }, 2000);
+        }
+    }
+}
 
 // Event delegation for wait request buttons
 document.addEventListener('click', function(e) {
-    // Handle clicks on respond buttons or their children (icons)
     const button = e.target.closest('.respond-btn');
     if (!button) return;
 
@@ -109,12 +260,16 @@ document.addEventListener('click', function(e) {
         return;
     }
 
-    console.log('Button clicked:', requestId, response); // Debug log
     respondToRequest(parseInt(requestId), response);
 });
 
 function respondToRequest(requestId, response) {
-    console.log('Sending response:', requestId, response); // Debug log
+    // Disable button during request
+    const button = document.querySelector(`[data-request-id="${requestId}"][data-response="${response}"]`);
+    if (button) {
+        button.disabled = true;
+        button.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing...';
+    }
     
     fetch('/api/respond_wait_request', {
         method: 'POST',
@@ -133,53 +288,95 @@ function respondToRequest(requestId, response) {
         return response.json();
     })
     .then(data => {
-        console.log('Response received:', data); // Debug log
-        
         if (data.success) {
-            // Remove the request from the UI
+            // Remove the request from UI with animation
             const requestElement = document.querySelector(`[data-request-id="${requestId}"]`);
             if (requestElement) {
-                const alertContainer = requestElement.closest('.alert');
-                if (alertContainer) {
-                    alertContainer.remove();
-                }
+                requestElement.style.transition = 'opacity 0.3s, transform 0.3s';
+                requestElement.style.opacity = '0';
+                requestElement.style.transform = 'translateX(100%)';
+                
+                setTimeout(() => {
+                    requestElement.remove();
+                    currentWaitRequestCount = Math.max(0, currentWaitRequestCount - 1);
+                    updateRequestCount(currentWaitRequestCount);
+                }, 300);
             }
             
-            // Update request count
-            const requestCount = document.getElementById('request-count');
-            if (requestCount) {
-                const currentCount = parseInt(requestCount.textContent) || 0;
-                requestCount.textContent = Math.max(0, currentCount - 1);
-            }
-            
-            // Show feedback
             const action = response === 'acknowledge' ? 'acknowledged' : 'declined';
-            alert(`Request ${action} successfully!`);
             
-            // Refresh the page to update the UI
-            setTimeout(() => {
-                location.reload();
-            }, 1000);
+            // Show success notification
+            showSuccessToast(`Request ${action} successfully! SMS sent to student.`);
             
         } else {
             alert(data.error || 'Error responding to request');
+            // Re-enable button
+            if (button) {
+                button.disabled = false;
+                button.innerHTML = response === 'acknowledge' ? 
+                    '<i class="fas fa-check"></i> Wait' : 
+                    '<i class="fas fa-times"></i> Decline';
+            }
         }
     })
     .catch(error => {
         console.error('Error responding to request:', error);
         alert('Error responding to request. Please try again.');
+        // Re-enable button
+        if (button) {
+            button.disabled = false;
+            button.innerHTML = response === 'acknowledge' ? 
+                '<i class="fas fa-check"></i> Wait' : 
+                '<i class="fas fa-times"></i> Decline';
+        }
     });
 }
-// Get bus ID from template
+
+// Show success toast notification
+function showSuccessToast(message) {
+    const toast = document.createElement('div');
+    toast.className = 'toast-notification success';
+    toast.innerHTML = `
+        <i class="fas fa-check-circle"></i>
+        <span>${message}</span>
+    `;
+    
+    document.body.appendChild(toast);
+    
+    // Auto remove after 3 seconds
+    setTimeout(() => {
+        toast.style.opacity = '0';
+        setTimeout(() => {
+            if (document.body.contains(toast)) {
+                document.body.removeChild(toast);
+            }
+        }, 300);
+    }, 3000);
+}
+
+// Request notification permission
+function requestNotificationPermission() {
+    if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+    }
+}
+
+// Initialize driver map
 function initDriverMap() {
-    driverMap = L.map('driver-map').setView([11.1083711,76.992266], 9.67);
+    driverMap = L.map('driver-map').setView([11.1083711, 76.992266], 9.67);
     
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
         attribution: '© OpenStreetMap contributors'
     }).addTo(driverMap);
     
-    // Load route stops if bus exists
-    if (busId !== null) {
+    // Get bus ID safely from data attribute
+    const busDataElem = document.getElementById('bus-data');
+    const busIdString = busDataElem ? busDataElem.getAttribute('data-bus-id') : '';
+    busId = busIdString ? parseInt(busIdString) : null;
+    
+    console.log('Bus ID:', busId);
+    
+    if (busId !== null && !isNaN(busId)) {
         loadRouteStops(busId);
     }
 }
@@ -212,51 +409,29 @@ function loadRouteStops(busId) {
         });
 }
 
-// Initialize map when page loads
-document.addEventListener('DOMContentLoaded', initDriverMap);
-
-// Rest of your existing functions (startTracking, stopTracking, etc.)...
-
-function loadRouteStops(busId) {
-    fetch(`/api/routes/${busId}`)
-        .then(response => response.json())
-        .then(stops => {
-            stops.forEach((stop, index) => {
-                const marker = L.marker([stop.lat, stop.lng])
-                    .bindPopup(`
-                        <b>${stop.name}</b><br>
-                        Order: ${stop.stop_order}<br>
-                        Estimated Time: ${stop.estimated_time}
-                    `);
-                marker.addTo(driverMap);
-                
-                // Add stop number
-                const numberMarker = L.divIcon({
-                    className: 'stop-number',
-                    html: `<div style="background: #007bff; color: white; border-radius: 50%; width: 25px; height: 25px; display: flex; align-items: center; justify-content: center; font-weight: bold;">${stop.stop_order}</div>`,
-                    iconSize: [25, 25],
-                    iconAnchor: [12, 12]
-                });
-                L.marker([stop.lat, stop.lng], { icon: numberMarker }).addTo(driverMap);
-            });
-        });
-}
-
 function startTracking() {
     tracking = true;
-    document.getElementById('start-tracking').style.display = 'none';
-    document.getElementById('stop-tracking').style.display = 'inline-block';
-    document.getElementById('tracking-status').innerHTML = '<span class="text-success">Active</span>';
+    const startBtn = document.getElementById('start-tracking');
+    const stopBtn = document.getElementById('stop-tracking');
+    const status = document.getElementById('tracking-status');
+    
+    if (startBtn) startBtn.style.display = 'none';
+    if (stopBtn) stopBtn.style.display = 'inline-block';
+    if (status) status.innerHTML = '<span class="text-success">Active</span>';
     
     updateLocation();
-    trackingInterval = setInterval(updateLocation, 5000); // Update every 5 seconds
+    trackingInterval = setInterval(updateLocation, 5000);
 }
 
 function stopTracking() {
     tracking = false;
-    document.getElementById('start-tracking').style.display = 'inline-block';
-    document.getElementById('stop-tracking').style.display = 'none';
-    document.getElementById('tracking-status').innerHTML = '<span class="text-warning">Not Tracking</span>';
+    const startBtn = document.getElementById('start-tracking');
+    const stopBtn = document.getElementById('stop-tracking');
+    const status = document.getElementById('tracking-status');
+    
+    if (startBtn) startBtn.style.display = 'inline-block';
+    if (stopBtn) stopBtn.style.display = 'none';
+    if (status) status.innerHTML = '<span class="text-warning">Not Tracking</span>';
     
     if (trackingInterval) {
         clearInterval(trackingInterval);
@@ -281,12 +456,13 @@ function updateLocation() {
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    document.getElementById('last-update').textContent = new Date().toLocaleTimeString();
+                    const lastUpdate = document.getElementById('last-update');
+                    if (lastUpdate) {
+                        lastUpdate.textContent = new Date().toLocaleTimeString();
+                    }
                     
-                    // Update map center to current location
                     driverMap.setView([lat, lng], 15);
                     
-                    // Add/update current location marker
                     if (window.currentLocationMarker) {
                         driverMap.removeLayer(window.currentLocationMarker);
                     }
@@ -304,50 +480,36 @@ function updateLocation() {
             .catch(error => {
                 console.error('Error updating location:', error);
             });
+        }, function(error) {
+            console.error('Geolocation error:', error);
         });
     }
 }
 
-function respondToRequest(requestId, response) {
-    fetch('/api/respond_wait_request', {
-        method: 'POST',
-        headers: {
-            'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ 
-            request_id: requestId, 
-            response: response 
-        })
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            // Remove the request from the UI
-            const requestElement = document.querySelector(`[data-request-id="${requestId}"]`);
-            if (requestElement) {
-                requestElement.remove();
-            }
-            
-            // Update request count
-            const requestCount = document.getElementById('request-count');
-            requestCount.textContent = parseInt(requestCount.textContent) - 1;
-            
-            // Show feedback
-            const action = response === 'acknowledge' ? 'acknowledged' : 'declined';
-            alert(`Request ${action} successfully!`);
-        }
-    })
-    .catch(error => {
-        console.error('Error responding to request:', error);
-        alert('Error responding to request');
-    });
-}
+// Start everything when page loads
+document.addEventListener('DOMContentLoaded', function() {
+    initDriverMap();
+    requestNotificationPermission();
+    
+    // Start polling for wait requests
+    pollInterval = setInterval(pollWaitRequests, 3000); // Every 3 seconds
+    
+    // Initial poll after 1 second
+    setTimeout(pollWaitRequests, 1000);
+    
+    // Event listeners for tracking buttons
+    const startBtn = document.getElementById('start-tracking');
+    const stopBtn = document.getElementById('stop-tracking');
+    
+    if (startBtn) startBtn.addEventListener('click', startTracking);
+    if (stopBtn) stopBtn.addEventListener('click', stopTracking);
+});
 
-// Event listeners
-document.getElementById('start-tracking').addEventListener('click', startTracking);
-document.getElementById('stop-tracking').addEventListener('click', stopTracking);
-
-// Initialize map when page loads
-document.addEventListener('DOMContentLoaded', initDriverMap);
+// Stop polling when page unloads
+window.addEventListener('beforeunload', function() {
+    if (pollInterval) {
+        clearInterval(pollInterval);
+    }
+});
 </script>
 {% endblock %}
