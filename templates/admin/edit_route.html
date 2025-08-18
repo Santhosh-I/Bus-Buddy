@@ -1,0 +1,421 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-map"></i> Interactive Route Editor</h5>
+                    <small class="text-muted">Click on the map to add stops, drag to reorder</small>
+                </div>
+                <div class="card-body">
+                    <div id="route-map" style="height: 500px;"></div>
+                    
+                    <div class="mt-3">
+                        <button type="button" class="btn btn-success" id="add-stop-mode">
+                            <i class="fas fa-map-marker-alt"></i> Add Stop Mode
+                        </button>
+                        <button type="button" class="btn btn-info" id="clear-all-stops">
+                            <i class="fas fa-trash"></i> Clear All Stops
+                        </button>
+                        <button type="button" class="btn btn-warning" id="auto-order-stops">
+                            <i class="fas fa-sort-numeric-down"></i> Auto Order Stops
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-edit"></i> Edit Route: {{ route.route_name }}</h5>
+                </div>
+                <div class="card-body">
+                    <form method="POST" id="route-form">
+                        <div class="mb-3">
+                            <label class="form-label">Route Name</label>
+                            <input type="text" class="form-control" name="route_name" 
+                                   value="{{ route.route_name }}" required>
+                        </div>
+
+                        <div class="mb-3">
+                            <label class="form-label">Assigned Bus</label>
+                            <select class="form-select" name="bus_id" required>
+                                <option value="">Select Bus</option>
+                                {% for bus in buses %}
+                                <option value="{{ bus.id }}" 
+                                        {{ 'selected' if route.bus_id == bus.id else '' }}>
+                                    {{ bus.bus_number }}
+                                </option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <div class="row">
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">Start Time</label>
+                                    <input type="time" class="form-control" name="start_time" 
+                                           value="{{ route.start_time }}" required>
+                                </div>
+                            </div>
+                            <div class="col-md-6">
+                                <div class="mb-3">
+                                    <label class="form-label">End Time</label>
+                                    <input type="time" class="form-control" name="end_time" 
+                                           value="{{ route.end_time }}" required>
+                                </div>
+                            </div>
+                        </div>
+
+                        <h6>Route Stops <span id="stop-count" class="badge bg-secondary">0</span></h6>
+                        <div id="stops-list" class="mb-3 max-height-300 overflow-auto">
+                            <!-- Dynamic stops list will be populated here -->
+                        </div>
+
+                        <input type="hidden" name="stops_data" id="stops-data-input">
+
+                        <div class="d-grid gap-2">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-save"></i> Save Route
+                            </button>
+                            <a href="{{ url_for('manage_routes') }}" class="btn btn-secondary">
+                                <i class="fas fa-arrow-left"></i> Back to Routes
+                            </a>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let routeMap;
+let stops = [];
+let addStopMode = false;
+let stopMarkers = [];
+
+// Initialize with existing stops
+{% for stop in stops %}
+stops.push({
+    id: {{ stop.id }},
+    name: '{{ stop.name }}',
+    lat: {{ stop.lat }},
+    lng: {{ stop.lng }},
+    time: '{{ stop.estimated_time }}',
+    order: {{ stop.stop_order }}
+});
+{% endfor %}
+
+function initRouteMap() {
+    routeMap = L.map('route-map').setView([11.1083711, 76.992266], 13);
+    
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        attribution: '© OpenStreetMap contributors'
+    }).addTo(routeMap);
+    
+    // Load existing stops
+    loadStopsOnMap();
+    
+    // Map click handler for adding stops
+    routeMap.on('click', function(e) {
+        if (addStopMode) {
+            addStopAtLocation(e.latlng);
+        }
+    });
+    
+    updateStopsList();
+}
+
+function loadStopsOnMap() {
+    stops.forEach(stop => {
+        addStopMarker(stop);
+    });
+}
+
+function addStopAtLocation(latlng) {
+    const stopName = prompt('Enter stop name:');
+    if (stopName) {
+        const stopTime = prompt('Enter estimated time (HH:MM):', '08:00');
+        if (stopTime) {
+            const newStop = {
+                id: Date.now(), // Temporary ID
+                name: stopName,
+                lat: latlng.lat,
+                lng: latlng.lng,
+                time: stopTime,
+                order: stops.length + 1
+            };
+            
+            stops.push(newStop);
+            addStopMarker(newStop);
+            updateStopsList();
+            
+            // Exit add mode
+            addStopMode = false;
+            document.getElementById('add-stop-mode').innerHTML = '<i class="fas fa-map-marker-alt"></i> Add Stop Mode';
+            document.getElementById('add-stop-mode').classList.remove('btn-danger');
+            document.getElementById('add-stop-mode').classList.add('btn-success');
+        }
+    }
+}
+
+function addStopMarker(stop) {
+    const marker = L.marker([stop.lat, stop.lng], {
+        draggable: true,
+        title: stop.name
+    }).addTo(routeMap);
+    
+    // Custom icon with stop number
+    const stopIcon = L.divIcon({
+        className: 'custom-stop-marker',
+        html: `<div class="stop-marker-number">${stop.order}</div>`,
+        iconSize: [30, 30],
+        iconAnchor: [15, 15]
+    });
+    marker.setIcon(stopIcon);
+    
+    marker.bindPopup(`
+        <b>${stop.name}</b><br>
+        Order: ${stop.order}<br>
+        Time: ${stop.time}<br>
+        <button onclick="editStop(${stop.id})" class="btn btn-sm btn-warning">Edit</button>
+        <button onclick="deleteStop(${stop.id})" class="btn btn-sm btn-danger">Delete</button>
+    `);
+    
+    // Handle marker drag
+    marker.on('dragend', function(e) {
+        const newLatLng = e.target.getLatLng();
+        const stopIndex = stops.findIndex(s => s.id === stop.id);
+        if (stopIndex !== -1) {
+            stops[stopIndex].lat = newLatLng.lat;
+            stops[stopIndex].lng = newLatLng.lng;
+            updateStopsList();
+        }
+    });
+    
+    stop.marker = marker;
+    stopMarkers.push(marker);
+}
+
+function updateStopsList() {
+    const stopsList = document.getElementById('stops-list');
+    const stopCount = document.getElementById('stop-count');
+    
+    stopCount.textContent = stops.length;
+    
+    if (stops.length === 0) {
+        stopsList.innerHTML = '<p class="text-muted">No stops added yet</p>';
+        return;
+    }
+    
+    // Sort stops by order
+    stops.sort((a, b) => a.order - b.order);
+    
+    let html = '';
+    stops.forEach((stop, index) => {
+        html += `
+        <div class="stop-item card mb-2" data-stop-id="${stop.id}">
+            <div class="card-body p-2">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div>
+                        <strong>${stop.order}. ${stop.name}</strong><br>
+                        <small class="text-muted">Time: ${stop.time} | Lat: ${stop.lat.toFixed(6)}, Lng: ${stop.lng.toFixed(6)}</small>
+                    </div>
+                    <div class="btn-group btn-group-sm">
+                        <button type="button" class="btn btn-outline-primary" onclick="editStop(${stop.id})">
+                            <i class="fas fa-edit"></i>
+                        </button>
+                        <button type="button" class="btn btn-outline-danger" onclick="deleteStop(${stop.id})">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                        <button type="button" class="btn btn-outline-secondary" onclick="centerOnStop(${stop.id})">
+                            <i class="fas fa-crosshairs"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>`;
+    });
+    
+    stopsList.innerHTML = html;
+    
+    // Update form data
+    document.getElementById('stops-data-input').value = JSON.stringify(stops);
+    console.log("Updated stops data:", JSON.stringify(stops));
+}
+
+function editStop(stopId) {
+    const stop = stops.find(s => s.id === stopId);
+    if (!stop) return;
+    
+    const newName = prompt('Enter stop name:', stop.name);
+    if (newName !== null) {
+        const newTime = prompt('Enter estimated time (HH:MM):', stop.time);
+        if (newTime !== null) {
+            stop.name = newName;
+            stop.time = newTime;
+            
+            // Update marker popup
+            if (stop.marker) {
+                stop.marker.setPopupContent(`
+                    <b>${stop.name}</b><br>
+                    Order: ${stop.order}<br>
+                    Time: ${stop.time}<br>
+                    <button onclick="editStop(${stop.id})" class="btn btn-sm btn-warning">Edit</button>
+                    <button onclick="deleteStop(${stop.id})" class="btn btn-sm btn-danger">Delete</button>
+                `);
+            }
+            
+            updateStopsList();
+        }
+    }
+}
+
+function deleteStop(stopId) {
+    if (confirm('Are you sure you want to delete this stop?')) {
+        const stopIndex = stops.findIndex(s => s.id === stopId);
+        if (stopIndex !== -1) {
+            const stop = stops[stopIndex];
+            
+            // Remove marker from map
+            if (stop.marker) {
+                routeMap.removeLayer(stop.marker);
+            }
+            
+            // Remove from stops array
+            stops.splice(stopIndex, 1);
+            
+            // Reorder remaining stops
+            stops.forEach((s, index) => {
+                s.order = index + 1;
+                if (s.marker) {
+                    const stopIcon = L.divIcon({
+                        className: 'custom-stop-marker',
+                        html: `<div class="stop-marker-number">${s.order}</div>`,
+                        iconSize: [30, 30],
+                        iconAnchor: [15, 15]
+                    });
+                    s.marker.setIcon(stopIcon);
+                }
+            });
+            
+            updateStopsList();
+        }
+    }
+}
+
+function centerOnStop(stopId) {
+    const stop = stops.find(s => s.id === stopId);
+    if (stop) {
+        routeMap.setView([stop.lat, stop.lng], 16);
+        if (stop.marker) {
+            stop.marker.openPopup();
+        }
+    }
+}
+
+function clearAllStops() {
+    if (confirm('Are you sure you want to remove all stops?')) {
+        stops.forEach(stop => {
+            if (stop.marker) {
+                routeMap.removeLayer(stop.marker);
+            }
+        });
+        stops = [];
+        stopMarkers = [];
+        updateStopsList();
+    }
+}
+
+function autoOrderStops() {
+    if (stops.length < 2) return;
+    
+    // Simple ordering by latitude (north to south) - you can implement more sophisticated algorithms
+    stops.sort((a, b) => b.lat - a.lat);
+    
+    stops.forEach((stop, index) => {
+        stop.order = index + 1;
+        if (stop.marker) {
+            const stopIcon = L.divIcon({
+                className: 'custom-stop-marker',
+                html: `<div class="stop-marker-number">${stop.order}</div>`,
+                iconSize: [30, 30],
+                iconAnchor: [15, 15]
+            });
+            stop.marker.setIcon(stopIcon);
+        }
+    });
+    
+    updateStopsList();
+}
+
+// Event listeners
+document.getElementById('add-stop-mode').addEventListener('click', function() {
+    addStopMode = !addStopMode;
+    if (addStopMode) {
+        this.innerHTML = '<i class="fas fa-times"></i> Exit Add Mode';
+        this.classList.remove('btn-success');
+        this.classList.add('btn-danger');
+    } else {
+        this.innerHTML = '<i class="fas fa-map-marker-alt"></i> Add Stop Mode';
+        this.classList.remove('btn-danger');
+        this.classList.add('btn-success');
+    }
+});
+
+document.getElementById('clear-all-stops').addEventListener('click', clearAllStops);
+document.getElementById('auto-order-stops').addEventListener('click', autoOrderStops);
+
+document.getElementById('route-form').addEventListener('submit', function(e) {
+    const stopsData = JSON.stringify(stops);
+    document.getElementById('stops-data-input').value = stopsData;
+    console.log("Form submitting with stops data:", stopsData);
+    
+    // Optional: prevent submission if no stops (for testing)
+    if (stops.length === 0) {
+        console.warn("No stops to save!");
+    }
+});
+
+// Initialize map when page loads
+document.addEventListener('DOMContentLoaded', initRouteMap);
+</script>
+
+<style>
+.custom-stop-marker {
+    background: transparent;
+}
+
+.stop-marker-number {
+    background: #007bff;
+    color: white;
+    border-radius: 50%;
+    width: 30px;
+    height: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: bold;
+    border: 2px solid white;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+.max-height-300 {
+    max-height: 300px;
+}
+
+.stop-item {
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.stop-item:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+}
+</style>
+{% endblock %}

@@ -68,6 +68,25 @@
         {% endif %}
     {% endwith %}
 
+
+    <!-- Add to your existing navigation -->
+    {% if current_user.is_authenticated and current_user.role == 'admin' %}
+    <li class="nav-item dropdown">
+        <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+            <i class="fas fa-cogs"></i> Admin
+        </a>
+        <ul class="dropdown-menu">
+            <li><a class="dropdown-item" href="{{ url_for('manage_routes') }}">
+                <i class="fas fa-route"></i> Manage Routes
+            </a></li>
+            <li><a class="dropdown-item" href="{{ url_for('admin_dashboard') }}">
+                <i class="fas fa-tachometer-alt"></i> Dashboard
+            </a></li>
+        </ul>
+    </li>
+    {% endif %}
+
+
     <!-- Main Content -->
     <main>
         {% block content %}{% endblock %}

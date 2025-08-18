@@ -4,6 +4,9 @@ from models import db, User, Bus, Route, Stop, WaitRequest
 from utils import hash_password, verify_password, calculate_eta, haversine, send_sms
 from config import Config
 from datetime import datetime
+from werkzeug.utils import secure_filename
+from sqlalchemy.orm import joinedload
+import json
 import os
 
 app = Flask(__name__)
@@ -198,6 +201,160 @@ def admin_dashboard():
     routes = Route.query.all()
     
     return render_template('admin.html', buses=buses, users=users, routes=routes)
+
+@app.route('/admin/routes')
+@login_required
+def manage_routes():
+    if current_user.role != 'admin':
+        flash('Access denied', 'error')
+        return redirect(url_for('dashboard'))
+    
+    # CRITICAL: Use eager loading to avoid cache issues
+    routes = Route.query.options(joinedload(Route.stops)).all()
+    buses = Bus.query.all()
+    
+    # Debug: Print current stops count
+    for route in routes:
+        stops_count = len(list(route.stops))
+        print(f"[DEBUG] Route '{route.route_name}' has {stops_count} stops")
+    
+    return render_template('admin/routes.html', routes=routes, buses=buses)
+
+
+@app.route('/admin/route/<int:route_id>/edit', methods=['GET', 'POST'])
+@login_required
+def edit_route(route_id):
+    if current_user.role != 'admin':
+        flash('Access denied', 'error')
+        return redirect(url_for('dashboard'))
+    
+    route = Route.query.get_or_404(route_id)
+    stops = Stop.query.filter_by(route_id=route_id).order_by(Stop.stop_order).all()
+    buses = Bus.query.all()
+    
+    if request.method == 'POST':
+        print(f"[DEBUG] POST request received for route {route_id}")
+        print(f"[DEBUG] Form data keys: {list(request.form.keys())}")
+        
+        # Update route info
+        route.route_name = request.form['route_name']
+        route.start_time = request.form['start_time']
+        route.end_time = request.form['end_time']
+        route.bus_id = request.form['bus_id']
+        
+        # Delete existing stops
+        delete_count = Stop.query.filter_by(route_id=route_id).delete()
+        print(f"[DEBUG] Deleted {delete_count} existing stops")
+        
+        # Read stops_data
+        stops_data = request.form.get('stops_data')
+        print(f"[DEBUG] Received stops_data: {stops_data}")
+        print(f"[DEBUG] stops_data type: {type(stops_data)}")
+        
+        if stops_data:
+            try:
+                stops_list = json.loads(stops_data)
+                print(f"[DEBUG] Parsed {len(stops_list)} stops from JSON")
+                
+                for i, stop_data in enumerate(stops_list):
+                    print(f"[DEBUG] Processing stop {i}: {stop_data}")
+                    if stop_data['name'].strip():
+                        stop = Stop(
+                            route_id=route_id,
+                            name=stop_data['name'].strip(),
+                            lat=float(stop_data['lat']),
+                            lng=float(stop_data['lng']),
+                            stop_order=i + 1,
+                            estimated_time=stop_data['time']
+                        )
+                        db.session.add(stop)
+                        print(f"[DEBUG] Added stop: {stop.name}")
+                
+                db.session.commit()
+                print("[DEBUG] Commit successful")
+                
+                # Expire session cache
+                db.session.expire_all()
+                
+                # Verification
+                final_count = Stop.query.filter_by(route_id=route_id).count()
+                print(f"[DEBUG] Final verification: {final_count} stops now in database")
+                
+            except json.JSONDecodeError as e:
+                print(f"[ERROR] JSON parsing error: {e}")
+                flash(f'Error parsing stops data: {e}', 'error')
+                return redirect(url_for('edit_route', route_id=route_id))
+            except Exception as e:
+                print(f"[ERROR] General error: {e}")
+                db.session.rollback()
+                flash(f'Error saving stops: {e}', 'error')
+                return redirect(url_for('edit_route', route_id=route_id))
+        else:
+            print("[DEBUG] No stops_data received from form")
+        
+        flash('Route updated successfully!', 'success')
+        return redirect(url_for('manage_routes'))
+    
+    return render_template('admin/edit_route.html', route=route, stops=stops, buses=buses)
+
+@app.route('/admin/route/new', methods=['GET', 'POST'])
+@login_required
+def create_route():
+    if current_user.role != 'admin':
+        flash('Access denied', 'error')
+        return redirect(url_for('dashboard'))
+    
+    buses = Bus.query.all()
+    
+    if request.method == 'POST':
+        # Create new route
+        route = Route(
+            bus_id=request.form['bus_id'],
+            route_name=request.form['route_name'],
+            start_time=request.form['start_time'],
+            end_time=request.form['end_time']
+        )
+        db.session.add(route)
+        db.session.flush()  # Get the route ID
+        
+        # Add stops
+        stops_data = request.form.get('stops_data')
+        if stops_data:
+            stops_list = json.loads(stops_data)
+            for i, stop_data in enumerate(stops_list):
+                if stop_data['name'].strip():
+                    stop = Stop(
+                        route_id=route.id,
+                        name=stop_data['name'].strip(),
+                        lat=float(stop_data['lat']),
+                        lng=float(stop_data['lng']),
+                        stop_order=i + 1,
+                        estimated_time=stop_data['time']
+                    )
+                    db.session.add(stop)
+        
+        db.session.commit()
+        flash('Route created successfully!', 'success')
+        return redirect(url_for('manage_routes'))
+    
+    return render_template('admin/create_route.html', buses=buses)
+
+@app.route('/admin/route/<int:route_id>/delete', methods=['POST'])
+@login_required
+def delete_route(route_id):
+    if current_user.role != 'admin':
+        return jsonify({'error': 'Access denied'}), 403
+    
+    route = Route.query.get_or_404(route_id)
+    
+    # Delete associated stops first
+    Stop.query.filter_by(route_id=route_id).delete()
+    
+    # Delete the route
+    db.session.delete(route)
+    db.session.commit()
+    
+    return jsonify({'success': True, 'message': 'Route deleted successfully'})
 
 @app.route('/bus_tracking')
 @login_required
